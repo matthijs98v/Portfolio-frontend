@@ -1,0 +1,63 @@
+name: Deploy Project
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setting up Nodejs envoirment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Install requirements
+        run: npm ci
+
+      - name: Build static files for vue
+        run: npm run build
+
+      - name: Upload output as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+  deploy:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Download output artifact from te build process
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+
+      - name: Set up SSH
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-client
+          mkdir -p ~/.ssh
+          eval $(ssh-agent -s)
+          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Test SSH connection
+        run: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 22 root@matthijsverheijen.com 'echo connected'
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 22" -r ./dist/* root@matthijsverheijen.com:/opt/docker_containers/web/matthijsverheijen.com/test/src/frontend --delete
+
+    env:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    # Optional: Define an environment for deployment, like production
+    environment:
+      name: production
+      url: https://matthijsverheijen.com
