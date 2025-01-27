@@ -17,6 +17,9 @@ jobs:
         with:
           node-version: 22.13.0
 
+      - name: Setup envoirment vars
+        run: echo "VITE_API_URL=${{vars.API_URL}} >> $GITHUB_ENV
+
       - name: Install requirements
         run: npm ci
 
